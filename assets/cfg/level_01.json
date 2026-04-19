@@ -1,0 +1,46 @@
+{
+  "player_spawn": [616, 336],
+  "bullet_limit": 4,
+  "events": [
+    {
+      "enemy": "blue_square",
+      "time": 1.0,
+      "position": [180, 150]
+    },
+    {
+      "enemy": "yellow_square",
+      "time": 3.0,
+      "position": [950, 170]
+    },
+    {
+      "enemy": "pink_rectangle",
+      "time": 5.0,
+      "position": [420, 520]
+    },
+    {
+      "enemy": "gray_tall_rectangle",
+      "time": 7.0,
+      "position": [1110, 110]
+    },
+    {
+      "enemy": "blue_square",
+      "time": 9.0,
+      "position": [260, 300]
+    },
+    {
+      "enemy": "yellow_square",
+      "time": 11.0,
+      "position": [980, 500]
+    },
+    {
+      "enemy": "pink_rectangle",
+      "time": 13.0,
+      "position": [720, 580]
+    },
+    {
+      "enemy": "gray_tall_rectangle",
+      "time": 15.0,
+      "position": [900, 360]
+    }
+  ]
+}
