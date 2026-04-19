@@ -76,7 +76,7 @@ class GameEngine:
             CEnemySpawner(events=spawn_events),
         )
         self.world.create_player(
-            position=self.level_config["player_spawn"],
+            position=self._resolve_player_spawn_position(self.level_config["player_spawn"]),
             player_config=self.player_config,
             bullet_config=self.bullet_config,
             bullet_limit=int(self.level_config["bullet_limit"]),
@@ -136,6 +136,17 @@ class GameEngine:
 
         events.sort(key=lambda event: event.time)
         return events
+
+    def _resolve_player_spawn_position(
+        self,
+        configured_position: tuple[float, float],
+    ) -> tuple[float, float]:
+        frame_width, frame_height = self._get_frame_size(self.player_config)
+
+        return (
+            float(configured_position[0]) - frame_width / 2,
+            float(configured_position[1]) - frame_height / 2,
+        )
 
     def _load_window_config(self) -> dict[str, object]:
         window_config = self._load_json("window.json")
@@ -344,6 +355,20 @@ class GameEngine:
             config["color"] = self._read_color(explosion_config)
 
         return config
+
+    def _get_frame_size(self, data: dict[str, object]) -> tuple[float, float]:
+        if data.get("image_path") is not None:
+            image_path = self.project_root / str(data["image_path"])
+            texture = pygame.image.load(image_path)
+            frame_count = 1
+            animations = data.get("animations")
+            if animations is not None:
+                frame_count = int(animations["number_frames"])
+
+            return (texture.get_width() / frame_count, float(texture.get_height()))
+
+        size = data["size"]
+        return (float(size[0]), float(size[1]))
 
 
     def _read_animation_config(self, data: dict[str, object]) -> dict[str, object] | None:

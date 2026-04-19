@@ -1,8 +1,8 @@
 {
     "player_spawn": {
         "position": {
-            "x": 304,
-            "y": 164
+            "x": 320,
+            "y": 180
         },
         "max_bullets": 4
     },
