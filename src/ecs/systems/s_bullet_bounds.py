@@ -9,11 +9,7 @@ def system_bullet_bounds(world: World, play_area: pygame.Rect) -> None:
     bullets_to_destroy: list[int] = []
 
     for entity in world.get_bullet_entities():
-        transform = world.transforms[entity]
-        surface = world.surfaces[entity]
-        entity_rect = surface.surface.get_rect(
-            topleft=(transform.position.x, transform.position.y)
-        )
+        entity_rect = world.get_entity_rect(entity)
 
         if (
             entity_rect.left <= play_area.left

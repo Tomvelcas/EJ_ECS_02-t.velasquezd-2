@@ -4,8 +4,6 @@ from dataclasses import dataclass, field
 
 import pygame
 
-from src.ecs.components.c_surface import Color
-
 
 PLAYER_LEFT = "PLAYER_LEFT"
 PLAYER_RIGHT = "PLAYER_RIGHT"
@@ -23,8 +21,7 @@ class InputAction:
 @dataclass
 class CInputCommand:
     move_speed: float
-    bullet_size: tuple[int, int]
-    bullet_color: Color
+    bullet_template: dict[str, object]
     bullet_speed: float
     bullet_limit: int
     pending_actions: list[InputAction] = field(default_factory=list)

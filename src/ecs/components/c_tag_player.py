@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 
+import pygame
+
 
 @dataclass
 class CTagPlayer:
-    pass
+    respawn_position: pygame.Vector2

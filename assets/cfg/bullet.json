@@ -1,5 +1,4 @@
 {
-  "size": [12, 12],
-  "color": [255, 120, 120],
-  "speed": 520
+    "image": "assets/img/bullet.png",
+    "velocity": 200
 }

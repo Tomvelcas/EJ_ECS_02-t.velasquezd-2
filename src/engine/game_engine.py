@@ -6,13 +6,17 @@ from pathlib import Path
 import pygame
 
 from src.ecs.components.c_enemy_spawner import CEnemySpawner, SpawnEvent
+from src.ecs.systems.s_animation import system_animation
 from src.ecs.systems.s_bullet_bounds import system_bullet_bounds
 from src.ecs.systems.s_collision_enemy_bullet import system_collision_enemy_bullet
 from src.ecs.systems.s_collision_player_enemy import system_collision_player_enemy
 from src.ecs.systems.s_enemy_bounce import system_enemy_bounce
 from src.ecs.systems.s_enemy_spawner import system_enemy_spawner
+from src.ecs.systems.s_explosion_cleanup import system_explosion_cleanup
+from src.ecs.systems.s_hunter_behavior import system_hunter_behavior
 from src.ecs.systems.s_input import system_input
 from src.ecs.systems.s_movement import system_movement
+from src.ecs.systems.s_player_animation import system_player_animation
 from src.ecs.systems.s_player_bounds import system_player_bounds
 from src.ecs.systems.s_rendering import system_rendering
 from src.ecs.world import World
@@ -22,15 +26,22 @@ class GameEngine:
     def __init__(self, config_dir: str | Path | None = None) -> None:
         default_config_dir = Path(__file__).resolve().parents[2] / "assets" / "cfg"
         self.config_dir = Path(config_dir) if config_dir is not None else default_config_dir
+
+        try:
+            self.project_root = self.config_dir.parents[1]
+        except IndexError:
+            self.project_root = self.config_dir.parent
+
         self.window_config = self._load_window_config()
         self.enemy_definitions = self._load_enemy_definitions()
         self.level_config = self._load_level_config()
         self.player_config = self._load_player_config()
         self.bullet_config = self._load_bullet_config()
+        self.explosion_config = self._load_explosion_config()
 
         pygame.init()
         self.screen = pygame.display.set_mode(tuple(self.window_config["size"]))
-        pygame.display.set_caption(self.window_config["title"])
+        pygame.display.set_caption(str(self.window_config["title"]))
         self.clock = pygame.time.Clock()
         self.is_running = True
         self.delta_time = 0.0
@@ -53,7 +64,11 @@ class GameEngine:
 
     def _create(self) -> None:
         spawn_events = self._build_spawn_events()
-        self.world = World(enemy_templates=self.enemy_definitions)
+        self.world = World(
+            enemy_templates=self.enemy_definitions,
+            explosion_template=self.explosion_config,
+            project_root=self.project_root,
+        )
 
         spawner_entity = self.world.create_entity()
         self.world.add_enemy_spawner(
@@ -64,7 +79,7 @@ class GameEngine:
             position=self.level_config["player_spawn"],
             player_config=self.player_config,
             bullet_config=self.bullet_config,
-            bullet_limit=self.level_config["bullet_limit"],
+            bullet_limit=int(self.level_config["bullet_limit"]),
         )
 
     def _calculate_time(self) -> None:
@@ -85,12 +100,16 @@ class GameEngine:
 
         system_input(self.world, self.events)
         system_enemy_spawner(self.world, self.delta_time)
+        system_hunter_behavior(self.world, self.delta_time)
+        system_player_animation(self.world)
         system_movement(self.world, self.delta_time, self.screen.get_rect())
         system_enemy_bounce(self.world, self.screen.get_rect())
         system_player_bounds(self.world, self.screen.get_rect())
         system_collision_enemy_bullet(self.world)
         system_collision_player_enemy(self.world)
         system_bullet_bounds(self.world, self.screen.get_rect())
+        system_animation(self.world, self.delta_time)
+        system_explosion_cleanup(self.world)
 
     def _draw(self) -> None:
         if self.world is None:
@@ -109,7 +128,7 @@ class GameEngine:
         for event_data in self.level_config["events"]:
             events.append(
                 SpawnEvent(
-                    enemy_name=event_data["enemy"],
+                    enemy_name=str(event_data["enemy"]),
                     time=float(event_data["time"]),
                     position=pygame.Vector2(event_data["position"]),
                 )
@@ -155,27 +174,53 @@ class GameEngine:
 
         if "enemies" in enemy_config:
             for enemy_data in enemy_config["enemies"]:
-                definitions[enemy_data["name"]] = {
-                    "size": tuple(enemy_data["size"]),
-                    "color": tuple(enemy_data["color"]),
+                definitions[str(enemy_data["name"])] = {
+                    "enemy_kind": "asteroid",
+                    "size": self._read_size(enemy_data),
+                    "color": self._read_color(enemy_data),
                     "min_speed": float(enemy_data["min_speed"]),
                     "max_speed": float(enemy_data["max_speed"]),
                 }
-        else:
-            for enemy_name, enemy_data in enemy_config.items():
-                definitions[enemy_name] = {
-                    "size": (
-                        int(enemy_data["size"]["x"]),
-                        int(enemy_data["size"]["y"]),
-                    ),
-                    "color": (
-                        int(enemy_data["color"]["r"]),
-                        int(enemy_data["color"]["g"]),
-                        int(enemy_data["color"]["b"]),
-                    ),
-                    "min_speed": float(enemy_data["velocity_min"]),
-                    "max_speed": float(enemy_data["velocity_max"]),
-                }
+            return definitions
+
+        for enemy_name, enemy_data in enemy_config.items():
+            template: dict[str, object] = {
+                "image_path": enemy_data.get("image"),
+                "animations": self._read_animation_config(enemy_data),
+            }
+
+            if "velocity_chase" in enemy_data:
+                template.update(
+                    {
+                        "enemy_kind": "hunter",
+                        "chase_speed": float(enemy_data["velocity_chase"]),
+                        "return_speed": float(enemy_data["velocity_return"]),
+                        "distance_start_chase": float(enemy_data["distance_start_chase"]),
+                        "distance_start_return": float(enemy_data["distance_start_return"]),
+                    }
+                )
+            else:
+                template.update(
+                    {
+                        "enemy_kind": "asteroid",
+                        "min_speed": float(
+                            self._read_value(
+                                enemy_data,
+                                ["velocity_min", "min_speed"],
+                                default=0.0,
+                            )
+                        ),
+                        "max_speed": float(
+                            self._read_value(
+                                enemy_data,
+                                ["velocity_max", "max_speed"],
+                                default=0.0,
+                            )
+                        ),
+                    }
+                )
+
+            definitions[str(enemy_name)] = template
 
         return definitions
 
@@ -244,10 +289,9 @@ class GameEngine:
 
     def _load_player_config(self) -> dict[str, object]:
         player_config = self._load_json("player.json")
-
-        return {
-            "size": self._read_size(player_config),
-            "color": self._read_color(player_config),
+        config: dict[str, object] = {
+            "image_path": player_config.get("image"),
+            "animations": self._read_animation_config(player_config),
             "speed": float(
                 self._read_value(
                     player_config,
@@ -257,12 +301,18 @@ class GameEngine:
             ),
         }
 
+        if "size" in player_config:
+            config["size"] = self._read_size(player_config)
+
+        if "color" in player_config:
+            config["color"] = self._read_color(player_config)
+
+        return config
+
     def _load_bullet_config(self) -> dict[str, object]:
         bullet_config = self._load_json("bullet.json")
-
-        return {
-            "size": self._read_size(bullet_config),
-            "color": self._read_color(bullet_config),
+        config: dict[str, object] = {
+            "image_path": bullet_config.get("image"),
             "speed": float(
                 self._read_value(
                     bullet_config,
@@ -270,6 +320,66 @@ class GameEngine:
                     default=420.0,
                 )
             ),
+        }
+
+        if "size" in bullet_config:
+            config["size"] = self._read_size(bullet_config)
+
+        if "color" in bullet_config:
+            config["color"] = self._read_color(bullet_config)
+
+        return config
+
+    def _load_explosion_config(self) -> dict[str, object]:
+        explosion_config = self._load_json("explosion.json")
+        config: dict[str, object] = {
+            "image_path": explosion_config.get("image"),
+            "animations": self._read_animation_config(explosion_config),
+        }
+
+        if "size" in explosion_config:
+            config["size"] = self._read_size(explosion_config)
+
+        if "color" in explosion_config:
+            config["color"] = self._read_color(explosion_config)
+
+        return config
+
+
+    def _read_animation_config(self, data: dict[str, object]) -> dict[str, object] | None:
+        raw_animations = data.get("animations")
+
+        if raw_animations is None:
+            return None
+
+        number_frames = int(raw_animations["number_frames"])
+        if number_frames <= 0:
+            raise ValueError("Animation number_frames must be greater than zero.")
+
+        clips: dict[str, dict[str, object]] = {}
+
+        for clip_data in raw_animations["list"]:
+            name = str(clip_data["name"])
+            start = int(clip_data["start"])
+            end = int(clip_data["end"])
+            framerate = float(clip_data["framerate"])
+
+            if end < start:
+                raise ValueError(f"Animation '{name}' has an invalid frame range.")
+            if framerate <= 0:
+                raise ValueError(f"Animation '{name}' must have a positive framerate.")
+
+            clips[name] = {
+                "name": name,
+                "start": start,
+                "end": end,
+                "framerate": framerate,
+                "loop": bool(clip_data.get("loop", name != "EXPLODE")),
+            }
+
+        return {
+            "number_frames": number_frames,
+            "clips": clips,
         }
 
     def _read_size(self, data: dict[str, object]) -> tuple[int, int]:

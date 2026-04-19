@@ -30,16 +30,16 @@ def system_input(world: World, events: list[pygame.event.Event]) -> None:
 def _collect_keyboard_actions(input_command: CInputCommand) -> None:
     pressed_keys = pygame.key.get_pressed()
 
-    if pressed_keys[pygame.K_LEFT]:
+    if pressed_keys[pygame.K_LEFT] or pressed_keys[pygame.K_a]:
         input_command.pending_actions.append(InputAction(PLAYER_LEFT))
 
-    if pressed_keys[pygame.K_RIGHT]:
+    if pressed_keys[pygame.K_RIGHT] or pressed_keys[pygame.K_d]:
         input_command.pending_actions.append(InputAction(PLAYER_RIGHT))
 
-    if pressed_keys[pygame.K_UP]:
+    if pressed_keys[pygame.K_UP] or pressed_keys[pygame.K_w]:
         input_command.pending_actions.append(InputAction(PLAYER_UP))
 
-    if pressed_keys[pygame.K_DOWN]:
+    if pressed_keys[pygame.K_DOWN] or pressed_keys[pygame.K_s]:
         input_command.pending_actions.append(InputAction(PLAYER_DOWN))
 
 

@@ -2,5 +2,5 @@ from dataclasses import dataclass
 
 
 @dataclass
-class CTagEnemy:
-    enemy_type: str
+class CTagExplosion:
+    pass
