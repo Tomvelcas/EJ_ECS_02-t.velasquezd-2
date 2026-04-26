@@ -98,13 +98,3 @@ build/web/
 ```
 
 Esa carpeta se puede subir como HTML/Web a itch.io.
-
-## Nota para entrega
-
-Despues de publicar en itch.io, reemplazar en README.txt:
-
-```text
-PEGAR_AQUI_EL_ENLACE_DE_ITCH_IO
-```
-
-por el enlace real del juego.
