@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pygame
 
+from src.engine.resource_services import SoundService
+from src.engine.service_locator import ServiceLocator
 from src.ecs.components.c_hunter_behavior import (
     HUNTER_CHASE,
     HUNTER_IDLE,
@@ -22,6 +24,7 @@ def system_hunter_behavior(world: World, delta_time: float) -> None:
         transform = world.transforms[entity]
         velocity = world.velocities[entity]
         behavior = world.hunter_behaviors[entity]
+        previous_state = behavior.state
 
         distance_from_origin = transform.position.distance_to(behavior.origin)
 
@@ -54,6 +57,8 @@ def system_hunter_behavior(world: World, delta_time: float) -> None:
 
         if direction_to_player.length() <= behavior.distance_start_chase:
             behavior.state = HUNTER_CHASE
+            if previous_state != HUNTER_CHASE:
+                ServiceLocator.get(SoundService).play(behavior.sound_chase)
             if direction_to_player.length_squared() > 0:
                 velocity.velocity = direction_to_player.normalize() * behavior.chase_speed
             else:

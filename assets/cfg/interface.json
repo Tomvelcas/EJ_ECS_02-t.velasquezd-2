@@ -1,0 +1,62 @@
+{
+    "font": "assets/fnt/PressStart2P.ttf",
+    "texts": [
+        {
+            "kind": "title",
+            "content": "ROCKET HUNTER",
+            "color": {
+                "r": 126,
+                "g": 225,
+                "b": 255
+            },
+            "size": 14,
+            "position": {
+                "x": 18,
+                "y": 14
+            }
+        },
+        {
+            "kind": "instructions",
+            "content": "WASD/FLECHAS mover  Click disparar  E rocket  P pausa",
+            "color": {
+                "r": 230,
+                "g": 230,
+                "b": 230
+            },
+            "size": 7,
+            "position": {
+                "x": 18,
+                "y": 338
+            }
+        },
+        {
+            "kind": "rocket_status",
+            "content": "E Rocket: LISTO",
+            "color": {
+                "r": 126,
+                "g": 255,
+                "b": 178
+            },
+            "size": 8,
+            "position": {
+                "x": 18,
+                "y": 34
+            }
+        },
+        {
+            "kind": "pause",
+            "content": "PAUSA",
+            "color": {
+                "r": 255,
+                "g": 238,
+                "b": 135
+            },
+            "size": 24,
+            "position": {
+                "x": 252,
+                "y": 154
+            },
+            "visible": false
+        }
+    ]
+}

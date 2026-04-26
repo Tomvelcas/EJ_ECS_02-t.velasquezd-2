@@ -17,5 +17,7 @@
             }
         ]
     },
-    "input_velocity": 100
+    "input_velocity": 100,
+    "sound": "assets/snd/ufo.ogg",
+    "sound_interval": 0.35
 }

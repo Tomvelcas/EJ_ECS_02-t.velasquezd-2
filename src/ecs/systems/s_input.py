@@ -6,6 +6,7 @@ from src.ecs.components.c_input_command import (
     PLAYER_DOWN,
     PLAYER_FIRE,
     PLAYER_LEFT,
+    PLAYER_ROCKET,
     PLAYER_RIGHT,
     PLAYER_UP,
     CInputCommand,
@@ -23,7 +24,7 @@ def system_input(world: World, events: list[pygame.event.Event]) -> None:
     input_command = world.input_commands[player_entity]
     input_command.pending_actions.clear()
     _collect_keyboard_actions(input_command)
-    _collect_mouse_actions(input_command, events)
+    _collect_event_actions(input_command, events)
     _execute_actions(world, player_entity, input_command)
 
 
@@ -43,7 +44,7 @@ def _collect_keyboard_actions(input_command: CInputCommand) -> None:
         input_command.pending_actions.append(InputAction(PLAYER_DOWN))
 
 
-def _collect_mouse_actions(
+def _collect_event_actions(
     input_command: CInputCommand,
     events: list[pygame.event.Event],
 ) -> None:
@@ -52,6 +53,9 @@ def _collect_mouse_actions(
             input_command.pending_actions.append(
                 InputAction(PLAYER_FIRE, pygame.Vector2(event.pos))
             )
+
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_e:
+            input_command.pending_actions.append(InputAction(PLAYER_ROCKET))
 
 
 def _execute_actions(
@@ -132,10 +136,21 @@ def _command_fire(
     world.create_bullet_from_player(action.target_position)
 
 
+def _command_rocket(
+    world: World,
+    player_entity: int,
+    input_command: CInputCommand,
+    move_direction: pygame.Vector2,
+    action: InputAction,
+) -> None:
+    world.create_rocket_from_player()
+
+
 COMMAND_HANDLERS = {
     PLAYER_LEFT: _command_left,
     PLAYER_RIGHT: _command_right,
     PLAYER_UP: _command_up,
     PLAYER_DOWN: _command_down,
     PLAYER_FIRE: _command_fire,
+    PLAYER_ROCKET: _command_rocket,
 }

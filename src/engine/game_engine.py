@@ -1,24 +1,37 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
 import pygame
 
+from src.engine.resource_services import (
+    FontService,
+    ImageService,
+    SoundService,
+    TextService,
+)
+from src.engine.service_locator import ServiceLocator
 from src.ecs.components.c_enemy_spawner import CEnemySpawner, SpawnEvent
 from src.ecs.systems.s_animation import system_animation
 from src.ecs.systems.s_bullet_bounds import system_bullet_bounds
 from src.ecs.systems.s_collision_enemy_bullet import system_collision_enemy_bullet
 from src.ecs.systems.s_collision_player_enemy import system_collision_player_enemy
+from src.ecs.systems.s_collision_rocket_enemy import system_collision_rocket_enemy
 from src.ecs.systems.s_enemy_bounce import system_enemy_bounce
 from src.ecs.systems.s_enemy_spawner import system_enemy_spawner
 from src.ecs.systems.s_explosion_cleanup import system_explosion_cleanup
+from src.ecs.systems.s_homing_rocket import system_homing_rocket
 from src.ecs.systems.s_hunter_behavior import system_hunter_behavior
 from src.ecs.systems.s_input import system_input
 from src.ecs.systems.s_movement import system_movement
+from src.ecs.systems.s_movement_sound import system_movement_sound
 from src.ecs.systems.s_player_animation import system_player_animation
 from src.ecs.systems.s_player_bounds import system_player_bounds
 from src.ecs.systems.s_rendering import system_rendering
+from src.ecs.systems.s_rocket_ability import system_rocket_ability
+from src.ecs.systems.s_ui import system_ui
 from src.ecs.world import World
 
 
@@ -37,9 +50,12 @@ class GameEngine:
         self.level_config = self._load_level_config()
         self.player_config = self._load_player_config()
         self.bullet_config = self._load_bullet_config()
+        self.rocket_config = self._load_rocket_config()
         self.explosion_config = self._load_explosion_config()
+        self.interface_config = self._load_interface_config()
 
         pygame.init()
+        self._register_services()
         self.screen = pygame.display.set_mode(tuple(self.window_config["size"]))
         pygame.display.set_caption(str(self.window_config["title"]))
         self.clock = pygame.time.Clock()
@@ -49,6 +65,7 @@ class GameEngine:
         self.frame_rate = int(self.window_config["frame_rate"])
         self.background_color = tuple(self.window_config["background_color"])
         self.world: World | None = None
+        self.is_paused = False
 
     def run(self) -> None:
         self._create()
@@ -59,6 +76,19 @@ class GameEngine:
                 self._process_events()
                 self._update()
                 self._draw()
+        finally:
+            self._clean()
+
+    async def run_async(self) -> None:
+        self._create()
+
+        try:
+            while self.is_running:
+                self._calculate_time()
+                self._process_events()
+                self._update()
+                self._draw()
+                await asyncio.sleep(0)
         finally:
             self._clean()
 
@@ -79,8 +109,10 @@ class GameEngine:
             position=self._resolve_player_spawn_position(self.level_config["player_spawn"]),
             player_config=self.player_config,
             bullet_config=self.bullet_config,
+            rocket_config=self.rocket_config,
             bullet_limit=int(self.level_config["bullet_limit"]),
         )
+        self._create_interface_texts()
 
     def _calculate_time(self) -> None:
         self.delta_time = self.clock.tick(self.frame_rate) / 1000.0
@@ -91,6 +123,8 @@ class GameEngine:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.is_running = False
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_p:
+                self.is_paused = not self.is_paused
             else:
                 self.events.append(event)
 
@@ -98,18 +132,25 @@ class GameEngine:
         if self.world is None:
             return
 
-        system_input(self.world, self.events)
-        system_enemy_spawner(self.world, self.delta_time)
-        system_hunter_behavior(self.world, self.delta_time)
-        system_player_animation(self.world)
-        system_movement(self.world, self.delta_time, self.screen.get_rect())
-        system_enemy_bounce(self.world, self.screen.get_rect())
-        system_player_bounds(self.world, self.screen.get_rect())
-        system_collision_enemy_bullet(self.world)
-        system_collision_player_enemy(self.world)
-        system_bullet_bounds(self.world, self.screen.get_rect())
-        system_animation(self.world, self.delta_time)
-        system_explosion_cleanup(self.world)
+        if not self.is_paused:
+            system_input(self.world, self.events)
+            system_rocket_ability(self.world, self.delta_time)
+            system_enemy_spawner(self.world, self.delta_time)
+            system_hunter_behavior(self.world, self.delta_time)
+            system_homing_rocket(self.world, self.delta_time)
+            system_player_animation(self.world)
+            system_movement_sound(self.world, self.delta_time)
+            system_movement(self.world, self.delta_time, self.screen.get_rect())
+            system_enemy_bounce(self.world, self.screen.get_rect())
+            system_player_bounds(self.world, self.screen.get_rect())
+            system_collision_enemy_bullet(self.world)
+            system_collision_rocket_enemy(self.world)
+            system_collision_player_enemy(self.world)
+            system_bullet_bounds(self.world, self.screen.get_rect())
+            system_animation(self.world, self.delta_time)
+            system_explosion_cleanup(self.world)
+
+        system_ui(self.world, self.is_paused)
 
     def _draw(self) -> None:
         if self.world is None:
@@ -120,7 +161,17 @@ class GameEngine:
         pygame.display.flip()
 
     def _clean(self) -> None:
+        ServiceLocator.clear()
         pygame.quit()
+
+    def _register_services(self) -> None:
+        image_service = ImageService(self.project_root)
+        font_service = FontService(self.project_root)
+
+        ServiceLocator.register(ImageService, image_service)
+        ServiceLocator.register(FontService, font_service)
+        ServiceLocator.register(TextService, TextService(font_service))
+        ServiceLocator.register(SoundService, SoundService(self.project_root))
 
     def _build_spawn_events(self) -> list[SpawnEvent]:
         events: list[SpawnEvent] = []
@@ -147,6 +198,20 @@ class GameEngine:
             float(configured_position[0]) - frame_width / 2,
             float(configured_position[1]) - frame_height / 2,
         )
+
+    def _create_interface_texts(self) -> None:
+        if self.world is None:
+            return
+
+        default_font = str(self.interface_config["font"])
+
+        for text_config in self.interface_config["texts"]:
+            config = dict(text_config)
+            config.setdefault("font", default_font)
+            self.world.create_text(
+                position=self._read_position(config, ["position"], default=(0.0, 0.0)),
+                text_config=config,
+            )
 
     def _load_window_config(self) -> dict[str, object]:
         window_config = self._load_json("window.json")
@@ -189,6 +254,8 @@ class GameEngine:
                     "enemy_kind": "asteroid",
                     "size": self._read_size(enemy_data),
                     "color": self._read_color(enemy_data),
+                    "sound": enemy_data.get("sound"),
+                    "sound_chase": enemy_data.get("sound_chase"),
                     "min_speed": float(enemy_data["min_speed"]),
                     "max_speed": float(enemy_data["max_speed"]),
                 }
@@ -198,6 +265,8 @@ class GameEngine:
             template: dict[str, object] = {
                 "image_path": enemy_data.get("image"),
                 "animations": self._read_animation_config(enemy_data),
+                "sound": enemy_data.get("sound"),
+                "sound_chase": enemy_data.get("sound_chase"),
             }
 
             if "velocity_chase" in enemy_data:
@@ -234,6 +303,22 @@ class GameEngine:
             definitions[str(enemy_name)] = template
 
         return definitions
+
+    def _load_interface_config(self) -> dict[str, object]:
+        interface_config = self._load_json("interface.json")
+        texts = []
+        default_font = str(interface_config["font"])
+
+        for text_data in interface_config.get("texts", []):
+            text = dict(text_data)
+            text.setdefault("font", default_font)
+            text["color"] = self._read_color(text)
+            texts.append(text)
+
+        return {
+            "font": default_font,
+            "texts": texts,
+        }
 
     def _load_level_config(self) -> dict[str, object]:
         level_config = self._load_json("level_01.json")
@@ -303,6 +388,8 @@ class GameEngine:
         config: dict[str, object] = {
             "image_path": player_config.get("image"),
             "animations": self._read_animation_config(player_config),
+            "sound": player_config.get("sound"),
+            "sound_interval": float(player_config.get("sound_interval", 0.32)),
             "speed": float(
                 self._read_value(
                     player_config,
@@ -324,6 +411,7 @@ class GameEngine:
         bullet_config = self._load_json("bullet.json")
         config: dict[str, object] = {
             "image_path": bullet_config.get("image"),
+            "sound": bullet_config.get("sound"),
             "speed": float(
                 self._read_value(
                     bullet_config,
@@ -341,10 +429,31 @@ class GameEngine:
 
         return config
 
+    def _load_rocket_config(self) -> dict[str, object]:
+        rocket_config = self._load_json("rocket.json")
+        config: dict[str, object] = {
+            "image_path": rocket_config.get("image"),
+            "sound": rocket_config.get("sound"),
+            "speed": float(rocket_config.get("speed", 260.0)),
+            "cooldown": float(rocket_config.get("cooldown", 5.0)),
+            "lifetime": float(rocket_config.get("lifetime", 4.0)),
+            "collision_radius": float(rocket_config.get("collision_radius", 18.0)),
+            "explosion_radius": float(rocket_config.get("explosion_radius", 12.0)),
+        }
+
+        if "size" in rocket_config:
+            config["size"] = self._read_size(rocket_config)
+
+        if "color" in rocket_config:
+            config["color"] = self._read_color(rocket_config)
+
+        return config
+
     def _load_explosion_config(self) -> dict[str, object]:
         explosion_config = self._load_json("explosion.json")
         config: dict[str, object] = {
             "image_path": explosion_config.get("image"),
+            "sound": explosion_config.get("sound"),
             "animations": self._read_animation_config(explosion_config),
         }
 
@@ -358,8 +467,7 @@ class GameEngine:
 
     def _get_frame_size(self, data: dict[str, object]) -> tuple[float, float]:
         if data.get("image_path") is not None:
-            image_path = self.project_root / str(data["image_path"])
-            texture = pygame.image.load(image_path)
+            texture = ServiceLocator.get(ImageService).load(str(data["image_path"]))
             frame_count = 1
             animations = data.get("animations")
             if animations is not None:

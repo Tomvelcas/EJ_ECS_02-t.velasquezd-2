@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 import pygame
@@ -15,4 +17,5 @@ class CHunterBehavior:
     return_speed: float
     distance_start_chase: float
     distance_start_return: float
+    sound_chase: str | None = None
     state: str = HUNTER_IDLE

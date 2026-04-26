@@ -1,0 +1,13 @@
+{
+    "image": "assets/img/rocket.png",
+    "sound": "assets/snd/rocket.ogg",
+    "size": {
+        "x": 34,
+        "y": 34
+    },
+    "speed": 260,
+    "cooldown": 5.0,
+    "lifetime": 4.0,
+    "collision_radius": 17,
+    "explosion_radius": 12
+}
